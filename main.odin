@@ -145,9 +145,7 @@ main :: proc() {
 	}
 
 	// Main emulation loop with cycle limit to prevent infinite execution
-	max_cycles := 1000000 // Set as needed for debugging
-	cycles := 0
-	for cycles < max_cycles {
+	for {
 		opcode :=
 			(u16(state.memory[state.regProgramCounter]) << 8) |
 			u16(state.memory[state.regProgramCounter + 1])
@@ -172,10 +170,6 @@ main :: proc() {
 			fmt.println("Program counter exceeded program length")
 			break
 		}
-		cycles += 1
-	}
-	if cycles >= max_cycles {
-		fmt.println("Cycle limit reached. Possible infinite loop.")
 	}
 
 
