@@ -47,15 +47,16 @@ drawSprite := proc(
 				continue
 			}
 			bit := (charData[y] >> u16(7 - x)) & 1
-			if display.pixels[u8(x) + offsetX][u8(y) + offsetY] == true && bit == 1 {
+			old_pixel := display.pixels[u8(x) + offsetX][u8(y) + offsetY]
+			new_pixel := old_pixel ~ (bit == 1)
+			if old_pixel && (bit == 1) {
 				collisionRef^ = 1
 			}
-			setPixelAt(display, u8(x) + offsetX, u8(y) + offsetY, bit == 1)
+			setPixelAt(display, u8(x) + offsetX, u8(y) + offsetY, new_pixel)
 		}
 	}
 	draw(display)
 }
-
 
 // setPixelAt sets a pixel if within bounds
 setPixelAt := proc(display: ^Display, x: u8, y: u8, is_white: bool) {
