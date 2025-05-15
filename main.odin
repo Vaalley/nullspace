@@ -462,6 +462,16 @@ main :: proc() {
 		},
 		Instruction {
 			mask = 0xF0FF,
+			maskValue = 0xF018,
+			execute = proc(opcode: u16, state: ^State) {
+				// Set sound timer = Vx.
+
+				x := (opcode & 0x0F00) >> 8
+				state.regST = state.regV[x]
+			},
+		},
+		Instruction {
+			mask = 0xF0FF,
 			maskValue = 0xF01E,
 			execute = proc(opcode: u16, state: ^State) {
 				// Set I = I + Vx.
@@ -478,6 +488,19 @@ main :: proc() {
 
 				x := (opcode & 0x0F00) >> 8
 				state.regI = u16(state.regV[x]) * 5
+			},
+		},
+		Instruction {
+			mask = 0xF0FF,
+			maskValue = 0xF033,
+			execute = proc(opcode: u16, state: ^State) {
+				// Store BCD representation of Vx in memory locations I, I+1, and I+2.
+				// The interpreter takes the decimal value of Vx, and places the hundreds digit in memory at location in I, the tens digit at location I+1, and the ones digit at location I+2.
+
+				x := (opcode & 0x0F00) >> 8
+				state.memory[state.regI] = state.regV[x] / 100
+				state.memory[state.regI + 1] = (state.regV[x] / 10) % 10
+				state.memory[state.regI + 2] = state.regV[x] % 10
 			},
 		},
 		Instruction {
