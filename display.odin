@@ -66,7 +66,7 @@ setPixelAt := proc(display: ^Display, x: u8, y: u8, is_white: bool) {
 }
 
 // clear sets all pixels to black and redraws
-clear := proc(display: ^Display) {
+clearDisplay := proc(display: ^Display) {
 	for y in 0 ..< HEIGHT {
 		for x in 0 ..< WIDTH {
 			display.pixels[x][y] = false
@@ -76,6 +76,6 @@ clear := proc(display: ^Display) {
 }
 
 // init initializes the display window
-init := proc(display: ^Display) {
+initializeDisplay := proc(display: ^Display) {
 	raylib.InitWindow(WIDTH * PIXEL_SIZE, HEIGHT * PIXEL_SIZE, "64x32 Display")
 }

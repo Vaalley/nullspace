@@ -1,13 +1,14 @@
 package main
 
 import "core:fmt"
+import "core:math/rand"
 import "core:mem"
 import "core:os"
 import "core:time"
 import "vendor:raylib"
 
 kProgramStart :: 0x200 // 0x200 = 512
-kProgramFilePath :: "programs/pong.c8"
+kProgramFilePath :: "programs/tetris.c8"
 kExecutionFrequency :: 520 // Hz
 kTimerFrequency :: 60 // Hz - For regDT and regST
 
@@ -19,24 +20,27 @@ Instruction :: struct {
 
 // State holds the full emulation state, including registers, memory, and display
 State :: struct {
-	regProgramCounter: u16,
-	regV:              [16]u8,
-	regI:              u16,
-	regDT:             u8,
-	regST:             u8,
-	regStack:          [16]u16,
-	regStackPointer:   u16,
-	memory:            [4096]u8,
-	display:           Display,
+	regProgramCounter:  u16,
+	regV:               [16]u8,
+	regI:               u16,
+	regDT:              u8,
+	regST:              u8,
+	regStack:           [16]u16,
+	regStackPointer:    u16,
+	memory:             [4096]u8,
+	display:            Display,
+	waitingForKeypress: bool,
+	keyRegister:        u8,
 }
 
 // main is the entry point for the CHIP-8 emulator
 main :: proc() {
 	state := State {
-		regProgramCounter = kProgramStart,
+		regProgramCounter  = kProgramStart,
+		waitingForKeypress = false,
 	}
 
-	init(&state.display)
+	initializeDisplay(&state.display)
 
 	program_data, success := os.read_entire_file(kProgramFilePath)
 	if !success {
@@ -80,7 +84,7 @@ main :: proc() {
 			execute = proc(opcode: u16, state: ^State) {
 				// Clear the display.
 
-				clear(&state.display)
+				clearDisplay(&state.display)
 			},
 		},
 		Instruction {
@@ -192,6 +196,19 @@ main :: proc() {
 		},
 		Instruction {
 			mask = 0xF000,
+			maskValue = 0xC000,
+			execute = proc(opcode: u16, state: ^State) {
+				// Set Vx = random byte AND kk.
+
+				x := (opcode & 0x0F00) >> 8
+				kk := u8(opcode & 0x00FF)
+
+				random_byte := rand.uint32() & 0xFF
+				state.regV[x] = u8(random_byte) & kk
+			},
+		},
+		Instruction {
+			mask = 0xF000,
 			maskValue = 0xD000,
 			execute = proc(opcode: u16, state: ^State) {
 				// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
@@ -227,7 +244,12 @@ main :: proc() {
 			execute = proc(opcode: u16, state: ^State) {
 				// Wait for a key press, store the value of the key in Vx.
 
-				// TODO
+				x := (opcode & 0x0F00) >> 8
+				state.waitingForKeypress = true
+				state.keyRegister = u8(x)
+
+				// This will cause the PC to stay at this instruction until a key is pressed
+				state.regProgramCounter -= 2
 			},
 		},
 		Instruction {
@@ -262,12 +284,54 @@ main :: proc() {
 		},
 	}
 
+	// CHIP-8 key mapping to keyboard
+	// 1 2 3 C    →    1 2 3 4
+	// 4 5 6 D    →    Q W E R
+	// 7 8 9 E    →    A S D F
+	// A 0 B F    →    Z X C V
+	chip8_keys := [16]bool {
+		raylib.IsKeyDown(.X), // 0
+		raylib.IsKeyDown(.ONE), // 1
+		raylib.IsKeyDown(.TWO), // 2
+		raylib.IsKeyDown(.THREE), // 3
+		raylib.IsKeyDown(.Q), // 4
+		raylib.IsKeyDown(.W), // 5
+		raylib.IsKeyDown(.E), // 6
+		raylib.IsKeyDown(.A), // 7
+		raylib.IsKeyDown(.S), // 8
+		raylib.IsKeyDown(.D), // 9
+		raylib.IsKeyDown(.Z), // A
+		raylib.IsKeyDown(.C), // B
+		raylib.IsKeyDown(.FOUR), // C
+		raylib.IsKeyDown(.R), // D
+		raylib.IsKeyDown(.F), // E
+		raylib.IsKeyDown(.V), // F
+	}
+
 	// Main emulation loop
 	frame_duration := time.Second / kExecutionFrequency
 	timer_duration := time.Second / kTimerFrequency
 	last_timer_update := time.now()
 	for {
 		frame_start := time.now()
+
+		// Check for key presses if we're waiting for one
+		if state.waitingForKeypress {
+			for i in 0 ..< 16 {
+				if chip8_keys[i] {
+					state.regV[state.keyRegister] = u8(i)
+					state.waitingForKeypress = false
+					break
+				}
+			}
+
+			// Skip instruction execution if still waiting for keypress
+			if state.waitingForKeypress {
+				raylib.BeginDrawing()
+				raylib.EndDrawing()
+				continue
+			}
+		}
 
 		opcode :=
 			(u16(state.memory[state.regProgramCounter]) << 8) |
@@ -277,7 +341,7 @@ main :: proc() {
 			isInstruction := opcode & instruction.mask == instruction.maskValue
 			if isInstruction {
 				hasMatch = true
-				// fmt.printfln("0x%04X", opcode)
+				// fmt.printfln("0x%04X", opcode)`
 				instruction.execute(opcode, &state)
 				break
 			}
@@ -295,22 +359,17 @@ main :: proc() {
 			break
 		}
 
-		// Update timers at 60Hz
 		timer_elapsed := time.since(last_timer_update)
 		if timer_elapsed >= timer_duration {
 			last_timer_update = time.now()
 			if state.regDT > 0 {
 				state.regDT -= 1
 			}
-			// Also handle sound timer here if needed
-			if state.regST > 0 {
-				state.regST -= 1
-			}
 		}
 
-		elapsed := time.since(frame_start)
-		if elapsed < frame_duration {
-			time.sleep(frame_duration - elapsed)
+		execution_elapsed := time.since(frame_start)
+		if execution_elapsed < frame_duration {
+			time.sleep(frame_duration - execution_elapsed)
 		}
 	}
 
