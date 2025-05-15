@@ -312,7 +312,8 @@ main :: proc() {
 	frame_duration := time.Second / kExecutionFrequency
 	timer_duration := time.Second / kTimerFrequency
 	last_timer_update := time.now()
-	for {
+	for !raylib.WindowShouldClose() {
+		raylib.PollInputEvents()
 		frame_start := time.now()
 
 		// Check for key presses if we're waiting for one
@@ -371,11 +372,5 @@ main :: proc() {
 		if execution_elapsed < frame_duration {
 			time.sleep(frame_duration - execution_elapsed)
 		}
-	}
-
-
-	// Poll input until window closes
-	for !raylib.WindowShouldClose() {
-		raylib.PollInputEvents()
 	}
 }
